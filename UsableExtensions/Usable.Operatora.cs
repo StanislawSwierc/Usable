@@ -10,10 +10,21 @@ namespace UsableExtensions
         }
 
         public static IUsable<TResult> Select<T, TResult>(
-                this IUsable<T> source,
-                Func<T, TResult> selector)
+            this IUsable<T> source,
+            Func<T, TResult> selector)
+            where TResult : IDisposable
         {
-            return new SelectUsable<T, TResult>(source, selector);
+            return new SelectDisposableUsable<T, TResult>(source, selector);
+        }
+
+        public static IUsable<TResult> Select<T, TResult>(
+            this IUsable<T> source,
+            Func<T, TResult> selector,
+            bool dispose = true)
+        {
+            return (dispose && typeof(TResult) is IDisposable)
+                ? (IUsable<TResult>)new SelectCastDisposableUsable<T, TResult>(source, selector)
+                : (IUsable<TResult>)new SelectUsable<T, TResult>(source, selector);
         }
 
         public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
@@ -57,6 +68,66 @@ namespace UsableExtensions
                 return source.Use(outer =>
                 {
                     return func(selector(outer));
+                });
+            }
+        }
+
+        private class SelectDisposableUsable<TOuter, T> : IUsable<T>
+            where T : IDisposable
+        {
+            private readonly IUsable<TOuter> source;
+            private readonly Func<TOuter, T> selector;
+
+            public SelectDisposableUsable(
+                IUsable<TOuter> source,
+                Func<TOuter, T> selector)
+            {
+                this.source = source;
+                this.selector = selector;
+            }
+
+            public TResult Use<TResult>(Func<T, TResult> func)
+            {
+                return source.Use(outer =>
+                {
+                    using (var inner = selector(outer))
+                    {
+                        return func(inner);
+                    }
+                });
+            }
+        }
+
+        private class SelectCastDisposableUsable<TOuter, T> : IUsable<T>
+        {
+            private readonly IUsable<TOuter> source;
+            private readonly Func<TOuter, T> selector;
+
+            public SelectCastDisposableUsable(
+                IUsable<TOuter> source,
+                Func<TOuter, T> selector)
+            {
+                this.source = source;
+                this.selector = selector;
+            }
+
+            public TResult Use<TResult>(Func<T, TResult> func)
+            {
+                return source.Use(outer =>
+                {
+                    var inner = default(T);
+                    try
+                    {
+                        inner = selector(outer);
+                        return func(inner);
+                    }
+                    finally
+                    {
+                        if (inner is IDisposable disposable)
+                        {
+                            disposable.Dispose();
+                        }
+                    }
                 });
             }
         }
