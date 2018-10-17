@@ -107,5 +107,34 @@ namespace UsableExtensions.Test
                 Assert.Equal(expectedTrace, trace.ToLines());
             }
         }
+
+        /// <remarks>
+        /// In this test an explicit cast to <see cref="IUsable{TraceSourceScope}"/> is needed
+        /// because when compiler encounters a class which implements <see cref="IUsable{T}"/>
+        /// it still gives higher priority to the SelectMany which accepts <see cref="IDisposable"/>.
+        /// </remarks>
+        [Fact]
+        public void SelectMany_WhenCompositingWithClassWhichImplementsIUsable_ThenCastIsNeeded()
+        {
+            using (var trace = new TraceListenerScope())
+            {
+                var usable =
+                    from outer in new TraceSourceScopeUsable("outer")
+                    from inner in new TraceSourceScopeUsable("inner") as IUsable<TraceSourceScope>
+                    select string.Join('/', outer.Operation, inner.Operation, "value").Trace();
+                var expectedTrace = new string[]
+                {
+                    "Enter: outer",
+                    "    Enter: inner",
+                    "        Value: outer/inner/value",
+                    "    Leave: inner",
+                    "Leave: outer"
+                };
+
+                var value = usable.Value();
+
+                Assert.Equal(expectedTrace, trace.ToLines());
+            }
+        }
     }
 }

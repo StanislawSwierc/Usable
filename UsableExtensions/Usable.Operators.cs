@@ -28,12 +28,12 @@ namespace UsableExtensions
         }
 
         public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
-            this IUsable<TOuter> source,
-            Func<TOuter, IUsable<TInner>> collectionSelector,
+            this IUsable<TOuter> outerUsable,
+            Func<TOuter, IUsable<TInner>> innerUsableSelector,
             Func<TOuter, TInner, TResult> resultSelector)
         {
             return new SelectManyUsable<TOuter, TInner, TResult>(
-                source, collectionSelector, resultSelector);
+                outerUsable, innerUsableSelector, resultSelector);
         }
 
         public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
@@ -132,27 +132,27 @@ namespace UsableExtensions
             }
         }
 
-        private class SelectManyUsable<TOuter, TInner, T> : IUsable<T>
+        internal class SelectManyUsable<TOuter, TInner, T> : IUsable<T>
         {
-            private readonly IUsable<TOuter> source;
-            private readonly Func<TOuter, IUsable<TInner>> collectionSelector;
+            private readonly IUsable<TOuter> outerUsable;
+            private readonly Func<TOuter, IUsable<TInner>> innerUsableSelector;
             private readonly Func<TOuter, TInner, T> resultSelector;
 
             public SelectManyUsable(
-                IUsable<TOuter> source,
-                Func<TOuter, IUsable<TInner>> collectionSelector,
+                IUsable<TOuter> outerUsable,
+                Func<TOuter, IUsable<TInner>> innerUsableSelector,
                 Func<TOuter, TInner, T> resultSelector)
             {
-                this.source = source;
-                this.collectionSelector = collectionSelector;
+                this.outerUsable = outerUsable;
+                this.innerUsableSelector = innerUsableSelector;
                 this.resultSelector = resultSelector;
             }
 
             public TResult Use<TResult>(Func<T, TResult> func)
             {
-                return source.Use(outerScope =>
+                return outerUsable.Use(outerScope =>
                 {
-                    return collectionSelector(outerScope).Use(innerScope =>
+                    return innerUsableSelector(outerScope).Use(innerScope =>
                     {
                         return func(resultSelector(outerScope, innerScope));
                     });
@@ -184,17 +184,16 @@ namespace UsableExtensions
             {
                 return source.Use(outer =>
                 {
-                    var inner = default(TInner);
+                    var inner = collectionSelector(outer);
                     try
                     {
-                        inner = collectionSelector(outer);
                         return func(resultSelector(outer, inner));
                     }
                     finally
                     {
-                        if (dispose && inner != null)
+                        if (dispose)
                         {
-                            inner.Dispose();
+                            inner?.Dispose();
                         }
                     }
                 });
