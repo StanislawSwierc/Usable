@@ -2,7 +2,7 @@
 
 namespace UsableExtensions
 {
-    public interface IUsable<T>
+    public interface IUsable<out T>
     {
         TResult Use<TResult>(Func<T, TResult> func);
     }

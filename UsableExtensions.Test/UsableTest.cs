@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using Xunit;
 
@@ -319,6 +320,13 @@ namespace UsableExtensions.Test
             }
 
             Assert.Equal(0, Trace.IndentLevel);
+        }
+
+        [Fact]
+        public void CovarariantTest()
+        {
+            IUsable<StreamWriter> derivedUsable = null;
+            IUsable<TextWriter> baseUsable = derivedUsable;
         }
     }
 }
