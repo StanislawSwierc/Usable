@@ -8,13 +8,12 @@ namespace UsableExtensions
         public static IUsable<T> Default<T>() =>
             DefaultUsable<T>.Instance;
 
-        public static IUsable<T> Create<T>(Func<T> create)
-            where T : IDisposable =>
-            new CreateUsable<T>(create);
+        public static IUsable<T> Create<T>(Func<T> setup, Action<T> cleanup) =>
+            new CreateUsable<T>(setup, cleanup);
 
-        public static IUsable<T> Using<T>(T value)
+        public static IUsable<T> Using<T>(Func<T> create)
             where T : IDisposable =>
-            new UsableOnce<T>(value);
+            new DisposableUsable<T>(create);
 
         public static IUsable<T> AsUsable<T>(this T value) =>
             new ValueUsable<T>(value);
@@ -39,11 +38,36 @@ namespace UsableExtensions
         }
 
         private class CreateUsable<T> : IUsable<T>
+        {
+            private readonly Func<T> setup;
+            private readonly Action<T> cleanup;
+
+            public CreateUsable(Func<T> setup, Action<T> cleanup)
+            {
+                this.setup = setup;
+                this.cleanup = cleanup;
+            }
+
+            public TResult Use<TResult>(Func<T, TResult> func)
+            {
+                var scope = this.setup();
+                try
+                {
+                    return func(scope);
+                }
+                finally
+                {
+                    this.cleanup(scope);
+                }
+            }
+        }
+
+        private class DisposableUsable<T> : IUsable<T>
             where T : IDisposable
         {
             private readonly Func<T> create;
 
-            public CreateUsable(Func<T> create) =>
+            public DisposableUsable(Func<T> create) =>
                 this.create = create;
 
             public TResult Use<TResult>(Func<T, TResult> func)
