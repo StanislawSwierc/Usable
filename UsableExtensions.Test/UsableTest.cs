@@ -88,7 +88,7 @@ namespace UsableExtensions.Test
         }
 
         [Fact]
-        public void Select_WhenDisposableSelector_ThenUsableCallsDispose()
+        public void Select_WhenDisposableSelector_ThenUsableDoesNotcallDispose()
         {
             using (var trace = new TraceListenerScope())
             {
@@ -98,13 +98,75 @@ namespace UsableExtensions.Test
                 var expectedTrace = new string[]
                 {
                     "Enter: outer",
-                    "Leave: outer"
                 };
 
                 var value = usable.Value();
 
-                Assert.Throws<ObjectDisposedException>(() => value.Dispose());
                 Assert.Equal(expectedTrace, trace.ToLines());
+
+                value.Dispose();
+            }
+        }
+
+        /// <remarks>
+        /// This tests highlights how <see cref="IUsable{T}"/> should NOT be used. Disposable
+        /// resource is returned directly in the select expression without wrapping it into
+        /// usable. Since there is no usable created, the resource will not be released and the
+        /// tracess will be a mess.
+        /// </remarks>
+        [Fact]
+        public void SelectMany_WhenDisposableSelector_ThenUsableDoesNotcallDispose()
+        {
+            using (var trace = new TraceListenerScope())
+            {
+                var usable =
+                    from name in "outer".AsUsable()
+                    from outer in new TraceSourceScope(name)
+                    select new TraceSourceScope("inner");
+                var expectedTrace = new string[]
+                {
+                    "Enter: outer",
+                    "    Enter: inner",
+                    "    Leave: outer",
+                };
+
+                var value = usable.Value();
+
+                Assert.Equal(expectedTrace, trace.ToLines());
+
+                value.Dispose();
+            }
+        }
+
+        /// <remarks>
+        /// This test demonstrates how <see cref="IUsable{T}"/> should be used. It correctly
+        /// composes all the resources with from expressions. Although, inner is used in the select
+        /// expression, it is already wrapped in an usable, thus it is correctly relesed after
+        /// value is retrieved. This is visible both in traces and in the assertion which checks
+        /// for <see cref="ObjectDisposedException"/> exception.
+        /// </remarks>
+        [Fact]
+        public void SelectMany_WhenDisposableSelectorFrom_ThenUsableCallsDispose()
+        {
+            using (var trace = new TraceListenerScope())
+            {
+                var usable =
+                    from name in "outer".AsUsable()
+                    from outer in new TraceSourceScope(name)
+                    from inner in new TraceSourceScope("inner")
+                    select inner;
+                var expectedTrace = new string[]
+                {
+                    "Enter: outer",
+                    "    Enter: inner",
+                    "    Leave: inner",
+                    "Leave: outer",
+                };
+
+                var value = usable.Value();
+
+                Assert.Equal(expectedTrace, trace.ToLines());
+                Assert.Throws<ObjectDisposedException>(() => value.Dispose());
             }
         }
 

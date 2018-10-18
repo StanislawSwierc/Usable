@@ -9,6 +9,13 @@ namespace UsableExtensions
             return usable.Use(value => value);
         }
 
+        public static IUsable<TResult> Select<T, TResult>(
+            this IUsable<T> source,
+            Func<T, TResult> selector)
+        {
+            return new SelectUsable<T, TResult>(source, selector);
+        }
+
         public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
             this IUsable<TOuter> outerUsable,
             Func<TOuter, IUsable<TInner>> innerUsableSelector,
@@ -16,6 +23,28 @@ namespace UsableExtensions
         {
             return new SelectManyUsable<TOuter, TInner, TResult>(
                 outerUsable, innerUsableSelector, resultSelector);
+        }
+
+        private class SelectUsable<TOuter, T> : IUsable<T>
+        {
+            private readonly IUsable<TOuter> source;
+            private readonly Func<TOuter, T> selector;
+
+            public SelectUsable(
+                IUsable<TOuter> source,
+                Func<TOuter, T> selector)
+            {
+                this.source = source;
+                this.selector = selector;
+            }
+
+            public TResult Use<TResult>(Func<T, TResult> func)
+            {
+                return source.Use(outer =>
+                {
+                    return func(selector(outer));
+                });
+            }
         }
 
         internal class SelectManyUsable<TOuter, TInner, T> : IUsable<T>
