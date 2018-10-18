@@ -36,16 +36,6 @@ namespace UsableExtensions
                 outerUsable, innerUsableSelector, resultSelector);
         }
 
-        public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
-            this IUsable<TOuter> outerUsable,
-            Func<TOuter, TInner> innerDisposableSelector,
-            Func<TOuter, TInner, TResult> resultSelector,
-            bool dispose = true)
-            where TInner : IDisposable
-        {
-            return new SelectManyDisposableUsable<TOuter, TInner, TResult>(
-                outerUsable, innerDisposableSelector, resultSelector, dispose);
-        }
 
 
         #region Inner classes
@@ -160,46 +150,49 @@ namespace UsableExtensions
             }
         }
 
+
+        #endregion
+    }
+
+    public static class UsableDisposable
+    {
+        public static IUsable<TResult> SelectMany<TOuter, TInner, TResult>(
+            this IUsable<TOuter> outerUsable,
+            Func<TOuter, TInner> innerDisposableSelector,
+            Func<TOuter, TInner, TResult> resultSelector)
+            where TInner : IDisposable
+        {
+            return new SelectManyDisposableUsable<TOuter, TInner, TResult>(
+                outerUsable, innerDisposableSelector, resultSelector);
+        }
+
         private class SelectManyDisposableUsable<TOuter, TInner, T> : IUsable<T>
             where TInner : IDisposable
         {
             private readonly IUsable<TOuter> source;
             private readonly Func<TOuter, TInner> collectionSelector;
             private readonly Func<TOuter, TInner, T> resultSelector;
-            private bool dispose;
 
             public SelectManyDisposableUsable(
                 IUsable<TOuter> outerUsable,
                 Func<TOuter, TInner> innerDisposableSelector,
-                Func<TOuter, TInner, T> resultSelector,
-                bool dispose)
+                Func<TOuter, TInner, T> resultSelector)
             {
                 this.source = outerUsable;
                 this.collectionSelector = innerDisposableSelector;
                 this.resultSelector = resultSelector;
-                this.dispose = dispose;
             }
 
             public TResult Use<TResult>(Func<T, TResult> func)
             {
                 return source.Use(outer =>
                 {
-                    var inner = collectionSelector(outer);
-                    try
+                    using (var inner = collectionSelector(outer))
                     {
                         return func(resultSelector(outer, inner));
-                    }
-                    finally
-                    {
-                        if (dispose)
-                        {
-                            inner?.Dispose();
-                        }
                     }
                 });
             }
         }
-
-        #endregion
     }
 }
